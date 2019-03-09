@@ -3,8 +3,32 @@ package main
 
 import (
 	"encoding/binary"
-	//"container/list"
+	"container/list"
 	"fmt"
+)
+
+const (
+	IKCP_RTO_NDL     = 30  // no delay min rto
+	IKCP_RTO_MIN     = 100 // normal min rto
+	IKCP_RTO_DEF     = 200
+	IKCP_RTO_MAX     = 60000
+	IKCP_CMD_PUSH    = 81 // cmd: push data
+	IKCP_CMD_ACK     = 82 // cmd: ack
+	IKCP_CMD_WASK    = 83 // cmd: window probe (ask)
+	IKCP_CMD_WINS    = 84 // cmd: window size (tell)
+	IKCP_ASK_SEND    = 1  // need to send IKCP_CMD_WASK
+	IKCP_ASK_TELL    = 2  // need to send IKCP_CMD_WINS
+	IKCP_WND_SND     = 32
+	IKCP_WND_RCV     = 32
+	IKCP_MTU_DEF     = 1400
+	IKCP_ACK_FAST    = 3
+	IKCP_INTERVAL    = 100
+	IKCP_OVERHEAD    = 24
+	IKCP_DEADLINK    = 20
+	IKCP_THRESH_INIT = 2
+	IKCP_THRESH_MIN  = 2
+	IKCP_PROBE_INIT  = 7000   // 7 secs to probe window size
+	IKCP_PROBE_LIMIT = 120000 // up to 120 secs to probe window
 )
 
 // encode 8 bits unsigned int
@@ -84,13 +108,38 @@ type IKCPSEG struct {
 
 // define kcp
 type IKCPCB struct {
-	snd_queue *list.List
-	rcv_queue *list.List
-	snd_buf *list.List
-	rcv_buf *list.List
+	current uint32 // 当前系统时间
+	updated uint32 // Ikcp_update() 是否执行过的标记
+	ts_flush uint32 // Ikcp_flush() 执行的时间戳
+	interval uint32 // Ikcp_flush() 执行时间间隔
+	//ackcount uint32 // ack列表中要发送的ack数量
+	acklist []uint32 // ack列表
+	snd_wnd uint32 // 发送窗口
+	rmt_wnd uint32 // 远端窗口
+	cwnd // 拥塞窗口
+	nocwnd // 拥塞窗口标记
+	snd_nxt uint32 // 下一个要发送的分片编号
+	snd_una uint32 // 下一个待确认的分片编号
+	nsnd_que uint32 // snd_que长度
+	nsnd_buf uint32 // snd_buf 长度
+	fastresend uint32 // 快速重传
+	rx_rto uint32
+	xmit uint32
+	nodelay uint32 // 急速模式
+	dead_link uint32 // 连接
+	state uint32 // 连接状态
+	snd_queue *list.List // 发送队列
+	rcv_queue *list.List // 接收队列
+	snd_buf *list.List // 发送缓存
+	rcv_buf *list.List // 接收缓存
 
 }
 
+// define ackItem
+type ackItem struct {
+	sn uint32
+	ts uint32
+}
 // create a new segment
 func ikcp_segment_new(size int) *IKCPSEG {
 	seg := new(IKCPSEG)
@@ -297,12 +346,221 @@ func Ikcp_send(kcp *IKCPCB, buffer []byte, len int) int {
 	return 0
 }
 
+// parse ack
 
+// ack append
 
-func main()  {
-	a := uint32(5)
-	b := uint32(8)
-	c := uint32(10)
-
-	fmt.Println(_ibound_(a, b, c))
+func ikcp_ack_push(kcp *IKCPCB, sn, ts uint32)  {
+	kcp.acklist = append(kcp.acklist, ackItem{sn, ts})
 }
+// parse data
+
+// input data
+
+// calculate wnd unused
+func ikcp_wnd_unused(kcp *IKCPCB) uint16 {
+	if kcp.rcv_queue.Len() < int(kcp.rcv_wnd) {
+		return uint16(kcp.rcv_wnd - kcp.rcv_queue.Len())
+	}
+	return 0
+}
+
+// Ikcp_flush
+func Ikcp_flush(kcp *IKCPCB)  {
+	var seg IKCPSEG
+	seg.conv = kcp.conv
+	seg.cmd = IKCP_CMD_ACK
+	seg.wnd = ikcp_wnd_unused(kcp)
+	seg.una = ikcp.rcv_nxt
+
+	var count, cwnd int32
+	lost := false
+	change := false
+	current := ikcp.current
+	buffer := ikcp.buffer
+	ptr := buffer
+
+	// Ikcp_update 一次都没有调用过
+	if 0 == ikcp.update {
+		return 
+	}
+
+	// flush ack
+	for i, ack := range kcp.acklist {
+		// size为buffer中填充数据大小
+		size := len(buffer) - len(ptr)
+		if size + IKCP_OVERHEAD > int(kcp.mtu) {
+			ikcp_output(kcp, buffer, size)
+			ptr = buffer
+		}
+
+		seg.sn, seg.ts = ack.sn, ack.ts
+		ptr = ikcp_encode_seg(ptr, &seg)
+	}
+	kcp.acklist = kcp.acklist[0:0]
+
+	// 探测窗口大小(如果远端窗口大小为0)
+
+	// 探测远端窗口大小
+
+	// 告知远端窗口大小
+
+	// 计算拥塞窗口大小
+	cwnd = _imin_(kcp.snd_wnd, kcp.rmt_wnd)
+	if 0 == kcp.nocwnd {
+		cwnd = _imin_(kcp.cwnd, cwnd)
+	}
+
+	// 将数据从snd_queue移动到snd_buf
+	for p := kcp.snd_queue.Front(); p != nil; {
+		// 分片编号不在发送窗口内 break
+		if _itimediff_(kcp.snd_nxt, kcp.snd_una + kcp.cwnd) >= 0{
+			break
+		}
+
+		// 将分片加入snd_buf队列
+		newseg := p.Value.(*IKCPSEG)
+		newseg.conv = kcp.conv
+		newseg.cmd = IKCP_CMD_PUSH
+		newseg.sn = kcp.snd_nxt
+		kcp.snd_buf.PushBack(newseg)
+
+		// 删除snd_queue节点
+		q := p.Next()
+		kcp.snd_queue.Remove(p)
+		p = q
+
+		kcp.snd_nxt++
+		//
+		kcp.nsnd_que--
+		kcp.nsnd_buf++		
+	}
+
+	// calculate resent
+	resent := uint32(kcp.fastresend)
+	if resent <= 0 {
+		resent = 0xffffffff
+	}
+
+	// rtomin
+
+	// flush data segment
+	for p := kcp.snd_buf.Front(); p != nil; p = p.Next() {
+		segment := p.Value.(*IKCPSEG)
+		needsend := false
+		if 0 == segment.xmit { // 初始发送
+			needsend = true
+			segment.rto = kcp.rx_rto
+			segment.resendts = current + segment.rto
+		} else if _itimediff_(current, segment.resendts) >= 0 {
+			needsend = true
+			kcp.xmit++
+
+			// 重新计算rto
+			if 0 == kcp.nodelay {
+				
+			} else {
+
+			}
+			segment.resendts = current + segment.rto
+
+			// 丢包
+			lost = true
+		} else if segment.fastack >= resent {
+			needsend = true
+			segment.xmit++
+			segment.fastack = 0
+			segment.resendts = current + segment.rto
+
+			// 触发快速重传
+			change = true
+		}
+
+		// 发送数据
+		if needsend {
+			segment.xmit++
+			segment.ts = current
+			segment.wnd = seg.wnd
+			segment.una = seg.una
+
+			size := len(buffer) - len(ptr)
+			need := IKCP_OVERHEAD + segment.len
+
+			if size + need > int32(kcp.mtu) {
+				ikcp_output(kcp, buffer, size)
+				ptr = buffer
+			}
+
+			ptr = ikcp_encode_seg(ptr,segment)
+			copy(ptr, segment.data)
+			ptr = ptr[segment.len:]
+
+			// 断开连接
+			if segment.xmit >= kcp.dead_link {
+				kcp.state = 0xffffffff
+			}
+		}
+	}
+
+	// 发送剩余数据
+	size := len(buffer) - len(ptr)
+	if size > 0 {
+		ikcp_output(kcp, buffer, size)
+	}
+
+	// change
+	if change {
+		
+	}
+
+	// lost
+	if lost {
+		
+	}
+
+	//cwnd
+	if kcp.cwnd < 1 {
+		
+	}
+}
+
+// update
+func Ikcp_update(kcp *IKCPCB, current uint32)  {
+	var slap int32
+	kcp.current = current
+
+	// 如果Ikcp_update()从未调用
+	if 0 ==kcp.updated {
+		kcp.updated = 1
+		kcp.ts_flush = current
+	}
+
+	// 当前时间与flush时间差
+	slap = _itimediff_(kcp.current, kcp.ts_flush)
+
+	if slap >= 10000 || slap <= -10000 {
+		kcp.ts_flush == kcp.current
+		slap = 0
+	}
+
+	// 到达刷新时间
+	// 调用Ikcp_flush()
+	if slap >= 0 {
+		kcp.ts_flush += kcp.interval
+		if _itimediff_(current, kcp.ts_flush) >= 0 {
+			kcp.ts_flush = kcp.current
+		}
+		Ikcp_flush(kcp)
+	}
+}
+
+// Ikcp_check
+
+
+// func main()  {
+// 	a := uint32(5)
+// 	b := uint32(8)
+// 	c := uint32(10)
+
+// 	fmt.Println(_ibound_(a, b, c))
+// }
