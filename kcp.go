@@ -404,7 +404,7 @@ func Ikcp_send(kcp *IKCPCB, buffer []byte, len int) int {
 	return 0
 }
 
-// parse ack
+// update ack
 func Ikcp_update_ack(kcp *IKCPCB, rtt int32)  {
 	rto := 0
 	if 0 == kcp.rx_srtt {
@@ -750,19 +750,6 @@ func Ikcp_flush(kcp *IKCPCB)  {
 		ptr = ikcp_encode_seg(ptr, &seg)
 	}
 
-	// for i, ack := range kcp.acklist {
-	// 	// size为buffer中填充数据大小
-	// 	size := len(buffer) - len(ptr)
-	// 	if size + IKCP_OVERHEAD > int(kcp.mtu) {
-	// 		ikcp_output(kcp, buffer, size)
-	// 		ptr = buffer
-	// 	}
-
-	// 	seg.sn, seg.ts = ack.sn, ack.ts
-	// 	ptr = ikcp_encode_seg(ptr, &seg)
-	// }
-	// kcp.acklist = kcp.acklist[0:0]
-
 	// 探测窗口大小(如果远端窗口大小为0)
 	if kcp.rmt_wnd == 0 {                                                   //远端窗口值为0
 		if kcp.probe_wait == 0 {
@@ -839,10 +826,7 @@ func Ikcp_flush(kcp *IKCPCB)  {
 		kcp.snd_queue.Remove(p)
 		p = q
 
-		kcp.snd_nxt++
-		//
-		kcp.nsnd_que--
-		kcp.nsnd_buf++		
+		kcp.snd_nxt++	
 	}
 
 	// calculate resent
@@ -977,8 +961,28 @@ func Ikcp_update(kcp *IKCPCB, current uint32)  {
 // Ikcp_check
 
 // set mtu
+func Ikcp_setmtu(kcp *IKCPCB, mtu int32) int32 {
+	if mtu < 50 || mtu < int32(IKCP_OVERHEAD) {
+		return -1
+	}
+	buffer := make([]byte, (uint32(mtu) + uint32(IKCP_OVERHEAD) * 3))
+	kcp.mtu = uint32(mtu)
+	kcp.mss = kcp.mtu - IKCP_OVERHEAD
+	kcp.buffer = buffer
+	return 0
+}
 
 // set interval
+func ikcp_interval(kcp *IKCPCB,interval int32) int32 {
+	if interval > 5000 {
+		interval = 5000
+	}
+	if interval < 10 {
+		interval = 10
+	}
+	kcp.interval = uint32(interval)
+	return 0
+}
 
 // set nodelay
 func Ikcp_nodelay(kcp *IKCPCB, nodelay, interval, resend, nc int32) int32 {
@@ -1021,3 +1025,6 @@ func Ikcp_wndsize(kcp *IKCPCB, sndwnd, rcvwnd int32) int32 {
 }
 
 // wait send
+func Ikcp_waitsnd(kcp *IKCPCB) int32 {
+	return int32(kcp.snd_buf.Len() + kcp.snd_queue.Len())
+}
