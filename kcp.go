@@ -107,53 +107,53 @@ type IKCPSEG struct {
 
 // define kcp
 type IKCPCB struct {
-	conv       uint32																// 连接号
-	mtu        uint32																// 最大传输单元
-	mss        uint32																// 最大分片大小
-	state      uint32																// 连接状态 (0xffffffff 表示断开连接)
-	snd_una    uint32																// 第一个未确认的分片编号
-	snd_nxt    uint32																// 待发送的分片编号
-	rcv_nxt    uint32																// 待接收的分片编号
-	ts_recent  uint32
-	ts_lastack uint32
-	ssthresh   uint32																// 慢启动门限
-	rx_rttval  uint32																// rttd
-	rx_srtt    uint32																// rtts
-	rx_rto     uint32                                                            	// rto
-	rx_minrto  uint32                                                            	// 最小rto
-	snd_wnd    uint32                                                            	// 发送窗口大小
-	rcv_wnd    uint32                                                            	// 接收窗口大小
-	rmt_wnd    uint32                                                            	// 远端接收窗口大小
-	cwnd       uint32                                                            	// 拥塞窗口大小
-	probe      uint32                                                            	// 探测变量
-	current    uint32                                                            	// 当前时间
-	interval   uint32                                                            	// 内部flush刷新时间间隔
-	ts_flush   uint32                                                            	// 下次flush刷新时间
-	xmit       uint32                                                            	// kcp重传次数
-	nrcv_buf   uint32                                                            	// rcv_buf长度
-	nsnd_buf   uint32                                                            	// snd_buf长度
-	nrcv_que   uint32                                                            	// rcv_que长度
-	nsnd_que   uint32                                                            	// snd_que长度
-	nodelay    uint32                                                            	// 是否启动nodelay模式
-	updated    uint32                                                            	// 是否调用过update函数
-	ts_probe   uint32                                                            	// 下次探测窗口的时间戳
-	probe_wait uint32                                                            	// 探测窗口需要等待的时间
-	dead_link  uint32                                                            	// 最大重传次数
-	incr       uint32                                                            	// 可发送的最大数据量
-	snd_queue  *list.List                                                        	// 发送队列
-	rcv_queue  *list.List                                                        	// 接收队列
-	snd_buf    *list.List                                                        	// 发送缓存
-	rcv_buf    *list.List                                                        	// 接收缓存
-	acklist    *list.List                                                        	// 待发送的ack列表
-	ackcount   uint32                                                            	// 待发送的ack数量
-	ackblock   uint32                                                            	//
-	user       interface{}                                                       	// 用户
-	buffer     []byte                                                            	// 存储发送字节流的缓存
-	fastresend int32                                                             	// 触发快速重传的ack个数
-	nocwnd     int32                                                             	// 取消拥塞控制
-	logmask    int32                                                             	//
-	writelog   func(log []byte, kcp *IKCPCB, user []byte)                        	//
-	Output     func(buf []byte, _len int32, kcp *IKCPCB, user interface{}) int32 	//
+	conv       uint32                                                            // 连接号
+	mtu        uint32                                                            // 最大传输单元
+	mss        uint32                                                            // 最大分片大小
+	state      uint32                                                            // 连接状态 (0xffffffff 表示断开连接)
+	snd_una    uint32                                                            // 第一个未确认的分片编号
+	snd_nxt    uint32                                                            // 待发送的分片编号
+	rcv_nxt    uint32                                                            // 待接收的分片编号
+	ts_recent  uint32                                                            //
+	ts_lastack uint32                                                            //
+	ssthresh   uint32                                                            // 慢启动门限
+	rx_rttval  uint32                                                            // rttd
+	rx_srtt    uint32                                                            // rtts
+	rx_rto     uint32                                                            // rto
+	rx_minrto  uint32                                                            // 最小rto
+	snd_wnd    uint32                                                            // 发送窗口大小
+	rcv_wnd    uint32                                                            // 接收窗口大小
+	rmt_wnd    uint32                                                            // 远端接收窗口大小
+	cwnd       uint32                                                            // 拥塞窗口大小
+	probe      uint32                                                            // 探测变量
+	current    uint32                                                            // 当前时间
+	interval   uint32                                                            // 内部flush刷新时间间隔
+	ts_flush   uint32                                                            // 下次flush刷新时间
+	xmit       uint32                                                            // kcp重传次数
+	nrcv_buf   uint32                                                            // rcv_buf长度
+	nsnd_buf   uint32                                                            // snd_buf长度
+	nrcv_que   uint32                                                            // rcv_que长度
+	nsnd_que   uint32                                                            // snd_que长度
+	nodelay    uint32                                                            // 是否启动nodelay模式
+	updated    uint32                                                            // 是否调用过update函数
+	ts_probe   uint32                                                            // 下次探测窗口的时间戳
+	probe_wait uint32                                                            // 探测窗口需要等待的时间
+	dead_link  uint32                                                            // 最大重传次数
+	incr       uint32                                                            // 可发送的最大数据量
+	snd_queue  *list.List                                                        // 发送队列
+	rcv_queue  *list.List                                                        // 接收队列
+	snd_buf    *list.List                                                        // 发送缓存
+	rcv_buf    *list.List                                                        // 接收缓存
+	acklist    *list.List                                                        // 待发送的ack列表
+	ackcount   uint32                                                            // 待发送的ack数量
+	ackblock   uint32                                                            //
+	user       interface{}                                                       // 用户
+	buffer     []byte                                                            // 存储发送字节流的缓存
+	fastresend int32                                                             // 触发快速重传的ack个数
+	nocwnd     int32                                                             // 取消拥塞控制
+	logmask    int32                                                             //
+	writelog   func(log []byte, kcp *IKCPCB, user []byte)                        //
+	Output     func(buf []byte, _len int32, kcp *IKCPCB, user interface{}) int32 //
 }
 
 // define ackItem
