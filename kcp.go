@@ -267,7 +267,7 @@ func Ikcp_recv(kcp *IKCPCB, buffer []byte, len int32) int32 {
 	}
 
 	// merge fragment
-	for p := kcp.rcv_queue.Front(); p != nil; p = p.Next() {
+	for p := kcp.rcv_queue.Front(); p != nil; {
 		seg := p.Value.(*IKCPSEG)
 		copy(buffer, seg.data[:seg.len])
 		buffer = buffer[seg.len:]
